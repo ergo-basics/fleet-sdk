@@ -104,6 +104,40 @@ const chain = tx1
 const allTxs = chain.toEIP12Object();
 ```
 
+## Firma y Envío
+
+Es crucial entender que al llamar a `.toEIP12Object()` (o `.toPlainObject()`) en una cadena de transacciones, el resultado es un **Array** de transacciones, no un objeto único.
+
+Un error común es intentar firmar el resultado directamente como si fuera una sola transacción, lo que suele provocar errores como `Cannot read properties of undefined (reading 'map')` en las funciones de firma.
+
+### Forma Correcta de Procesar
+
+Debes iterar sobre el array de transacciones, firmarlas y enviarlas en orden secuencial. Esto es necesario para que la segunda transacción encuentre los outputs de la primera en la mempool.
+
+```typescript
+// 1. Obtener el array de transacciones no firmadas
+const unsignedTransactions = chain.toEIP12Object(); 
+// Retorna: [TX1, TX2, ...]
+
+const signedTxs = [];
+const txIds = [];
+
+// 2. Iterar, firmar y enviar secuencialmente
+for (const unsignedTx of unsignedTransactions) {
+  // a) Firmar la transacción actual
+  const signedTx = await signTransaction(unsignedTx);
+  signedTxs.push(signedTx);
+
+  // b) Enviar a la red inmediatamente
+  // Es importante enviarla antes de procesar la siguiente para que 
+  // la red acepte los inputs de la siguiente transacción.
+  const txId = await submitTransaction(signedTx);
+  txIds.push(txId);
+  
+  console.log(`Transacción enviada: ${txId}`);
+}
+```
+
 ## Detalles Técnicos Importantes
 
 *   **Validación de Inputs**: Al construir la cadena, Fleet SDK asume que la transacción padre es válida. Si la transacción padre falla al minarse, toda la cadena fallará.
